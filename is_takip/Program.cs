@@ -6,15 +6,16 @@ using is_takip.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1) CORS: React (Vite) ve CRA için izin ver
+// 1) CORS: Canlý Vercel adresini ve yerel geliþtirme adreslerini ekle
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
         policy
             .WithOrigins(
-                "http://localhost:5173", // Vite
-                "http://localhost:3000"  // CRA
+                "https://is-takip-theta.vercel.app", // GÜNCELLEME: Canlý Vercel adresini buraya ekledik
+                "http://localhost:5173",           // Vite (yerel geliþtirme)
+                "http://localhost:3000"            // CRA (yerel geliþtirme)
             )
             .AllowAnyHeader()
             .AllowAnyMethod();
@@ -35,9 +36,6 @@ builder.Services.AddControllers()
 
         // Ýliþkili tablolarda döngüleri kýr (Müþteri <-> Ýþler vs.)
         options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-
-        // Ýsteðe baðlý: tarih formatlarýný standartlaþtýrmak istersen
-        // options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
 // 4) Swagger
