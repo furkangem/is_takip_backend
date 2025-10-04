@@ -1,0 +1,113 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.defterkayitlari (
+  kayit_id integer NOT NULL DEFAULT nextval('defterkayitlari_kayit_id_seq'::regclass),
+  islem_tarihi date NOT NULL,
+  aciklama character varying NOT NULL,
+  tutar numeric NOT NULL,
+  tip character varying NOT NULL CHECK (tip::text = ANY (ARRAY['income'::character varying, 'expense'::character varying]::text[])),
+  durum character varying NOT NULL CHECK (durum::text = ANY (ARRAY['paid'::character varying, 'unpaid'::character varying]::text[])),
+  vade_tarihi date,
+  odenme_tarihi date,
+  notlar text,
+  CONSTRAINT defterkayitlari_pkey PRIMARY KEY (kayit_id)
+);
+CREATE TABLE public.defternotlari (
+  not_id integer NOT NULL DEFAULT nextval('defternotlari_not_id_seq'::regclass),
+  baslik character varying NOT NULL,
+  aciklama text,
+  kategori character varying NOT NULL CHECK (kategori::text = ANY (ARRAY['todo'::character varying, 'reminder'::character varying, 'important'::character varying]::text[])),
+  olusturma_tarihi timestamp without time zone NOT NULL,
+  vade_tarihi date,
+  tamamlandi_mi boolean NOT NULL,
+  CONSTRAINT defternotlari_pkey PRIMARY KEY (not_id)
+);
+CREATE TABLE public.ishakedisleri (
+  is_hakedis_id integer NOT NULL DEFAULT nextval('ishakedisleri_is_hakedis_id_seq'::regclass),
+  is_id integer NOT NULL,
+  personel_id integer NOT NULL,
+  hakedis_tutari numeric NOT NULL,
+  calisilan_gun_sayisi integer NOT NULL,
+  odeme_yontemi character varying CHECK (odeme_yontemi::text = ANY (ARRAY['cash'::character varying, 'transfer'::character varying, 'card'::character varying]::text[])),
+  CONSTRAINT ishakedisleri_pkey PRIMARY KEY (is_hakedis_id),
+  CONSTRAINT fk_ishakedisleri_musteriisleri FOREIGN KEY (is_id) REFERENCES public.musteriisleri(is_id)
+);
+CREATE TABLE public.ismalzemeleri (
+  is_malzeme_id integer NOT NULL DEFAULT nextval('ismalzemeleri_is_malzeme_id_seq'::regclass),
+  is_id integer NOT NULL,
+  malzeme_adi character varying NOT NULL,
+  birim character varying,
+  miktar numeric NOT NULL,
+  birim_fiyat numeric NOT NULL,
+  CONSTRAINT ismalzemeleri_pkey PRIMARY KEY (is_malzeme_id),
+  CONSTRAINT fk_ismalzemeleri_musteriisleri FOREIGN KEY (is_id) REFERENCES public.musteriisleri(is_id)
+);
+CREATE TABLE public.kullanicilar (
+  kullanici_id integer NOT NULL DEFAULT nextval('kullanicilar_kullanici_id_seq'::regclass),
+  ad_soyad character varying NOT NULL,
+  kullanici_adi character varying NOT NULL UNIQUE,
+  sifre character varying NOT NULL,
+  rol character varying NOT NULL CHECK (rol::text = ANY (ARRAY['SUPER_ADMIN'::character varying, 'VIEWER'::character varying, 'FOREMAN'::character varying]::text[])),
+  CONSTRAINT kullanicilar_pkey PRIMARY KEY (kullanici_id)
+);
+CREATE TABLE public.musteriisleri (
+  is_id integer NOT NULL DEFAULT nextval('musteriisleri_is_id_seq'::regclass),
+  musteri_id integer NOT NULL,
+  konum character varying NOT NULL,
+  is_aciklamasi text NOT NULL,
+  tarih date NOT NULL,
+  gelir_tutari numeric NOT NULL,
+  gelir_odeme_yontemi character varying CHECK (gelir_odeme_yontemi::text = ANY (ARRAY['TRY'::character varying, 'USD'::character varying, 'EUR'::character varying, 'GOLD'::character varying]::text[])),
+  gelir_altin_turu character varying CHECK (gelir_altin_turu::text = ANY (ARRAY['gram'::character varying, 'quarter'::character varying, 'full'::character varying]::text[])),
+  CONSTRAINT musteriisleri_pkey PRIMARY KEY (is_id),
+  CONSTRAINT fk_musteriisleri_musteriler FOREIGN KEY (musteri_id) REFERENCES public.musteriler(musteri_id)
+);
+CREATE TABLE public.musteriler (
+  musteri_id integer NOT NULL DEFAULT nextval('musteriler_musteri_id_seq'::regclass),
+  musteri_adi character varying NOT NULL,
+  iletisim_bilgisi character varying,
+  adres character varying,
+  genel_is_tanimi text,
+  CONSTRAINT musteriler_pkey PRIMARY KEY (musteri_id)
+);
+CREATE TABLE public.ortakgiderler (
+  gider_id integer NOT NULL DEFAULT nextval('ortakgiderler_gider_id_seq'::regclass),
+  aciklama character varying NOT NULL,
+  tutar numeric NOT NULL,
+  tarih timestamp without time zone NOT NULL,
+  odeme_yontemi character varying NOT NULL CHECK (odeme_yontemi::text = ANY (ARRAY['cash'::character varying, 'transfer'::character varying, 'card'::character varying]::text[])),
+  odeyen_kisi character varying NOT NULL CHECK (odeyen_kisi::text = ANY (ARRAY['Ömer'::character varying, 'Barýþ'::character varying, 'Kasa'::character varying]::text[])),
+  durum character varying NOT NULL CHECK (durum::text = ANY (ARRAY['paid'::character varying, 'unpaid'::character varying]::text[])),
+  silinme_tarihi timestamp without time zone,
+  CONSTRAINT ortakgiderler_pkey PRIMARY KEY (gider_id)
+);
+CREATE TABLE public.personel (
+  personel_id integer NOT NULL DEFAULT nextval('personel_personel_id_seq'::regclass),
+  ad_soyad character varying NOT NULL,
+  not_metni text,
+  not_guncellenme_tarihi timestamp without time zone,
+  CONSTRAINT personel_pkey PRIMARY KEY (personel_id)
+);
+CREATE TABLE public.personelodemeleri (
+  odeme_id integer NOT NULL DEFAULT nextval('personelodemeleri_odeme_id_seq'::regclass),
+  personel_id integer NOT NULL,
+  tutar numeric NOT NULL,
+  tarih timestamp without time zone NOT NULL,
+  musteri_is_id integer,
+  odeyen_kisi character varying NOT NULL CHECK (odeyen_kisi::text = ANY (ARRAY['Ömer'::character varying, 'Barýþ'::character varying, 'Kasa'::character varying]::text[])),
+  odeme_yontemi character varying NOT NULL CHECK (odeme_yontemi::text = ANY (ARRAY['cash'::character varying, 'transfer'::character varying, 'card'::character varying]::text[])),
+  CONSTRAINT personelodemeleri_pkey PRIMARY KEY (odeme_id),
+  CONSTRAINT fk_personelodemeleri_musteriisleri FOREIGN KEY (musteri_is_id) REFERENCES public.musteriisleri(is_id)
+);
+CREATE TABLE public.puantajkayitlari (
+  kayit_id integer NOT NULL DEFAULT nextval('puantajkayitlari_kayit_id_seq'::regclass),
+  personel_id integer NOT NULL,
+  musteri_is_id integer NOT NULL,
+  tarih date NOT NULL,
+  gunluk_ucret numeric NOT NULL,
+  konum character varying,
+  is_tanimi text,
+  CONSTRAINT puantajkayitlari_pkey PRIMARY KEY (kayit_id),
+  CONSTRAINT fk_puantajkayitlari_musteriisleri FOREIGN KEY (musteri_is_id) REFERENCES public.musteriisleri(is_id)
+);

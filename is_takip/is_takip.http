@@ -1,0 +1,6 @@
+@is_takip_HostAddress = http://localhost:5234
+
+GET {{is_takip_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

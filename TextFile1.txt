@@ -1,0 +1,76 @@
+using is_takip.Models; // Namespace is_takip olarak güncellendi
+using Microsoft.AspNetCore.Mvc;
+using Supabase;
+using System; // Exception için eklendi
+using System.Threading.Tasks;
+
+namespace is_takip.Controllers // Namespace is_takip olarak güncellendi
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class PersonelController : ControllerBase
+    {
+        private readonly Supabase.Client _supabase;
+
+        // Dependency Injection ile Supabase Client'ýný alýyoruz
+        public PersonelController(Supabase.Client supabase)
+        {
+            _supabase = supabase;
+        }
+
+        // Bu metot, veritabanýndaki tüm personeli getirecek
+        // GET isteði atýlacak adres: /api/personel
+        [HttpGet]
+        public async Task<IActionResult> GetAllPersonel()
+        {
+            try
+            {
+                var response = await _supabase.From<Personel>().Get();
+
+                if (response.Models != null)
+                {
+                    // Baþarýlý olursa, personel listesini ve 200 OK durum kodunu döndür
+                    return Ok(response.Models);
+                }
+
+                // Veri bulunamazsa boþ bir liste ve 200 OK durum kodu döndür
+                return Ok(new List<Personel>());
+            }
+            catch (Exception ex)
+            {
+                // Bir hata olursa, hata mesajýný ve 500 Internal Server Error durum kodunu döndür
+                return StatusCode(500, $"Sunucu hatasý: {ex.Message}");
+            }
+        }
+
+        // Buraya daha sonra Ekleme, Silme, Güncelleme metodlarý eklenecek...
+        [HttpPost]
+        public async Task<IActionResult> CreatePersonel([FromBody] Personel yeniPersonel)
+        {
+            try
+            {
+                if (yeniPersonel == null)
+                {
+                    return BadRequest("Personel verisi boþ olamaz.");
+                }
+
+                // Gelen yeni personeli Supabase'e ekliyoruz.
+                var response = await _supabase.From<Personel>().Insert(yeniPersonel);
+
+                var eklenenPersonel = response.Models.FirstOrDefault();
+
+                if (eklenenPersonel == null)
+                {
+                    return BadRequest("Personel eklenirken bir sorun oluþtu.");
+                }
+
+                // Baþarýlý olursa, eklenen personelin tam halini ve 201 Created durum kodunu döndür.
+                return CreatedAtAction(nameof(GetAllPersonel), new { id = eklenenPersonel.Id }, eklenenPersonel);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Sunucu hatasý: {ex.Message}");
+            }
+        }
+    }
+}   
