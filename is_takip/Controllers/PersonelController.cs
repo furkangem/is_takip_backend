@@ -24,7 +24,13 @@ namespace is_takip.Controllers
                 : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
             return utc.AddHours(3);
         }
-
+        // --- TÜM PERSONELLERİ GETİRMEK İÇİN EKLENECEK KOD ---
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Personel>>> GetAllPersonel()
+        {
+            var personeller = await _context.Personel.ToListAsync();
+            return Ok(personeller);
+        }
         // --- PERSONEL CRUD İŞLEMLERİ ---
         [HttpPost]
         public async Task<ActionResult<Personel>> CreatePersonel([FromBody] Personel personel)
