@@ -54,7 +54,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// 6) Health check endpoints
+// 6) Health check endpoints (Versiyon İşaretleyici Eklendi)
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "healthy",
@@ -63,12 +63,15 @@ app.MapGet("/health", () => Results.Ok(new
 
 app.MapGet("/wake-db", async (ApplicationDbContext db) =>
 {
+    // BU BİR TESTTİR: RENDER'IN GÜNCEL KODU ÇALIŞTIRIP ÇALIŞTIRMADIĞINI ANLAMAK İÇİN
+    var version = "v2.1_FINAL_CORS_CHECK";
     try
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var canConnect = await db.Database.CanConnectAsync(cts.Token);
         return Results.Ok(new
         {
+            version, // Cevaba versiyonu ekliyoruz
             database = canConnect ? "connected" : "disconnected",
             timestamp = DateTime.UtcNow
         });
@@ -77,7 +80,8 @@ app.MapGet("/wake-db", async (ApplicationDbContext db) =>
     {
         return Results.Ok(new
         {
-            database = "waking up",
+            version, // Cevaba versiyonu ekliyoruz
+            database = "error",
             message = ex.Message,
             timestamp = DateTime.UtcNow
         });
