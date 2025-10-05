@@ -6,23 +6,23 @@ using is_takip.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ===================================
-// BÖLÜM 1: SERVÝS TANIMLAMALARI
-// ===================================
-
-// 1) CORS: TANIÞMAYAN CORS HATASINI KESÝNLEÞTÝRMEK ÝÇÝN GEÇÝCÝ OLARAK HER ÞEYE ÝZÝN VER
+// 1) CORS: Canlý Vercel adresini ve yerel geliþtirme adreslerini ekle
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
         policy
-            .AllowAnyOrigin() // <--- TÜM KAYNAKLARA GEÇÝCÝ ÝZÝN
+            .WithOrigins(
+                "https://is-takip-theta.vercel.app",
+                "http://localhost:5173",
+                "http://localhost:3000"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
 });
 
-// 2) DbContext: Baðlantý hatasý durumunda yeniden deneme (NEONDB için önemli)
+// 2) DbContext: Baðlantý hatasý durumunda yeniden deneme (RETRY) mekanizmasý
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString, npgsqlOptions =>
@@ -33,7 +33,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
             errorCodesToAdd: null);
     }));
 
-// 3) Controllerlar ve JSON ayarlarý (Döngüsel referanslarý çözmek için)
+// 3) Controllerlar ve JSON ayarlarý
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -46,10 +46,6 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-
-// ===================================
-// BÖLÜM 2: MIDDLEWARE AKIÞI
-// ===================================
 
 // 5) Swagger sadece Development'ta
 if (app.Environment.IsDevelopment())
@@ -67,15 +63,12 @@ app.MapGet("/health", () => Results.Ok(new
 
 app.MapGet("/wake-db", async (ApplicationDbContext db) =>
 {
-    // KOD GÜNCELLEMESÝNÝ KONTROL ETMEK ÝÇÝN YENÝ VERSÝYON ÝÞARETLEYÝCÝ
-    var version = "v2.3_CORS_TEST_ANYORIGIN";
     try
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
         var canConnect = await db.Database.CanConnectAsync(cts.Token);
         return Results.Ok(new
         {
-            version,
             database = canConnect ? "connected" : "disconnected",
             timestamp = DateTime.UtcNow
         });
@@ -84,8 +77,7 @@ app.MapGet("/wake-db", async (ApplicationDbContext db) =>
     {
         return Results.Ok(new
         {
-            version,
-            database = "error",
+            database = "waking up",
             message = ex.Message,
             timestamp = DateTime.UtcNow
         });
@@ -95,17 +87,14 @@ app.MapGet("/wake-db", async (ApplicationDbContext db) =>
 // 7) HTTPS yönlendirme
 app.UseHttpsRedirection();
 
-// 8) KRÝTÝK ADIM: Yönlendirmeyi etkinleþtir
-app.UseRouting();
-
-// 9) KRÝTÝK ADIM: CORS politikasýný uygulamadan hemen sonra çaðýr!
+// 8) CORS
 app.UseCors("AllowReactApp");
 
-// 10) Yetkilendirme
+// 9) Yetkilendirme
 app.UseAuthorization();
 
-// 11) Controller'larý eþle
+// 10) Controller'larý eþle
 app.MapControllers();
 
-// 12) Uygulamayý çalýþtýr
+// 11) Uygulamayý çalýþtýr
 app.Run();
