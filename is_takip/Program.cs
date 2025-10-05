@@ -13,7 +13,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
-                "https://is-takip-theta.vercel.app", // GÜNCELLEME: Canlý Vercel adresini buraya ekledik
+                "https://is-takip-theta.vercel.app",
                 "http://localhost:5173",           // Vite (yerel geliþtirme)
                 "http://localhost:3000"            // CRA (yerel geliþtirme)
             )
@@ -22,10 +22,17 @@ builder.Services.AddCors(options =>
     });
 });
 
-// 2) DbContext: appsettings.json’daki DefaultConnection’ý kullan
+// 2) DbContext: Baðlantý hatasý durumunda yeniden deneme (RETRY) mekanizmasý eklendi
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        // Bu kýsým, veritabaný uyandýðýnda oluþabilecek geçici baðlantý hatalarýný yönetir.
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorCodesToAdd: null);
+    }));
 
 // 3) Controllerlar ve JSON ayarlarý
 builder.Services.AddControllers()
