@@ -10,20 +10,15 @@ var builder = WebApplication.CreateBuilder(args);
 // BÖLÜM 1: SERVÝS TANIMLAMALARI
 // ===================================
 
-// 1) CORS: Canlý Vercel adresini ve yerel geliþtirme adreslerini ekle
+// 1) CORS: TANIÞMAYAN CORS HATASINI KESÝNLEÞTÝRMEK ÝÇÝN GEÇÝCÝ OLARAK HER ÞEYE ÝZÝN VER
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
         policy
-            .WithOrigins(
-                "https://is-takip-theta.vercel.app", // Yayýndaki frontend
-                "http://localhost:5173",            // Local Vite portu
-                "http://localhost:3000"             // Local CRA portu
-            )
+            .AllowAnyOrigin() // <--- TÜM KAYNAKLARA GEÇÝCÝ ÝZÝN
             .AllowAnyHeader()
             .AllowAnyMethod();
-        // .AllowCredentials(); // Eðer çerez kullanýyorsanýz bu satýrý açýn
     });
 });
 
@@ -72,8 +67,8 @@ app.MapGet("/health", () => Results.Ok(new
 
 app.MapGet("/wake-db", async (ApplicationDbContext db) =>
 {
-    // KOD GÜNCELLEMESÝNÝ KONTROL ETMEK ÝÇÝN VERSÝYON ÝÞARETLEYÝCÝ
-    var version = "v2.2_CORS_FIX_APPLIED";
+    // KOD GÜNCELLEMESÝNÝ KONTROL ETMEK ÝÇÝN YENÝ VERSÝYON ÝÞARETLEYÝCÝ
+    var version = "v2.3_CORS_TEST_ANYORIGIN";
     try
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(25));
