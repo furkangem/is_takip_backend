@@ -3,6 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using is_takip.Data;
 using is_takip.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace is_takip.Controllers
 {
@@ -62,7 +66,7 @@ namespace is_takip.Controllers
             var jobs = await _context.MusteriIsleri
                 .AsNoTracking()
                 .Include(j => j.IsHakedisleri)
-                .Include(j => j.IsMalzemeleri) // ✅ EKLENDİ - Malzemeleri dahil et
+                .Include(j => j.IsMalzemeleri)
                 .ToListAsync();
             return Ok(jobs);
         }
@@ -73,7 +77,7 @@ namespace is_takip.Controllers
             var job = await _context.MusteriIsleri
                 .AsNoTracking()
                 .Include(j => j.IsHakedisleri)
-                .Include(j => j.IsMalzemeleri) // ✅ EKLENDİ - Malzemeleri dahil et
+                .Include(j => j.IsMalzemeleri)
                 .FirstOrDefaultAsync(j => j.IsId == id);
             if (job == null) return NotFound();
             return Ok(job);
@@ -82,24 +86,18 @@ namespace is_takip.Controllers
         [HttpPost("isler")]
         public async Task<ActionResult<MusteriIsleri>> CreateMusteriIsi([FromBody] MusteriIsleri musteriIsi)
         {
-            // 1) Müşteri var mı? (FK)
             var musteriVarMi = await _context.Musteriler.AnyAsync(m => m.MusteriId == musteriIsi.MusteriId);
             if (!musteriVarMi)
                 return BadRequest("Geçersiz customerId (musteri bulunamadı).");
 
-            // 2) Zorunlu alanlar
             if (string.IsNullOrWhiteSpace(musteriIsi.Konum))
                 return BadRequest("Konum zorunludur.");
             if (string.IsNullOrWhiteSpace(musteriIsi.IsAciklamasi))
                 return BadRequest("İş açıklaması zorunludur.");
 
-            // 3) Tarih -> UTC
             musteriIsi.Tarih = ToUtc(musteriIsi.Tarih);
 
-            // 4) Enum tutarlılığı (GOLD ise altın türü zorunlu)
-            if (musteriIsi.GelirOdemeYontemi != null &&
-                musteriIsi.GelirOdemeYontemi == GelirOdemeYontemi.GOLD &&
-                musteriIsi.GelirAltinTuru == null)
+            if (musteriIsi.GelirOdemeYontemi == GelirOdemeYontemi.GOLD && musteriIsi.GelirAltinTuru == null)
             {
                 return BadRequest("Altın seçildi ise incomeGoldType zorunludur.");
             }
@@ -124,13 +122,11 @@ namespace is_takip.Controllers
             var mevcut = await _context.MusteriIsleri.FirstOrDefaultAsync(j => j.IsId == id);
             if (mevcut == null) return NotFound();
 
-            // Zorunlu alanlar
             if (string.IsNullOrWhiteSpace(dto.Konum))
                 return BadRequest("Konum zorunludur.");
             if (string.IsNullOrWhiteSpace(dto.IsAciklamasi))
                 return BadRequest("İş açıklaması zorunludur.");
 
-            // Güncelleme
             mevcut.MusteriId = dto.MusteriId;
             mevcut.Konum = dto.Konum;
             mevcut.IsAciklamasi = dto.IsAciklamasi;
@@ -139,10 +135,7 @@ namespace is_takip.Controllers
             mevcut.GelirOdemeYontemi = dto.GelirOdemeYontemi;
             mevcut.GelirAltinTuru = dto.GelirAltinTuru;
 
-            // Enum tutarlılığı
-            if (mevcut.GelirOdemeYontemi != null &&
-                mevcut.GelirOdemeYontemi == GelirOdemeYontemi.GOLD &&
-                mevcut.GelirAltinTuru == null)
+            if (mevcut.GelirOdemeYontemi == GelirOdemeYontemi.GOLD && mevcut.GelirAltinTuru == null)
             {
                 return BadRequest("Altın seçildi ise incomeGoldType zorunludur.");
             }
@@ -163,37 +156,42 @@ namespace is_takip.Controllers
 
         // ============== İŞ HAKEDİŞLERİ (EARNINGS) ==============
 
-        // UI tam listeyi gönderdiği için: mevcut kayıtları sil + gelen listeyi ekle (basit ve tutarlı)
         [HttpPost("isler/{isId}/hakedisler/bulk")]
         public async Task<IActionResult> UpsertHakedislerBulk(int isId, [FromBody] List<IsHakedisleri> list)
         {
-            // İş mevcut mu?
             var isVarMi = await _context.MusteriIsleri.AnyAsync(j => j.IsId == isId);
             if (!isVarMi) return BadRequest("Geçersiz isId.");
 
             using var tx = await _context.Database.BeginTransactionAsync();
-
-            // Eski kayıtları kaldır
-            var eskiler = await _context.IsHakedisleri.Where(h => h.IsId == isId).ToListAsync();
-            if (eskiler.Count > 0)
+            try
             {
-                _context.IsHakedisleri.RemoveRange(eskiler);
+                var eskiler = await _context.IsHakedisleri.Where(h => h.IsId == isId).ToListAsync();
+                if (eskiler.Any())
+                {
+                    _context.IsHakedisleri.RemoveRange(eskiler);
+                }
+
+                foreach (var item in list)
+                {
+                    item.IsId = isId;
+                    item.IsHakedisId = 0;
+                }
+                await _context.IsHakedisleri.AddRangeAsync(list);
+
                 await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return Ok(list);
             }
-
-            // Yeni listeyi ekle
-            foreach (var item in list)
+            catch (Exception ex)
             {
-                item.IsId = isId;
+                await tx.RollbackAsync();
+                Console.WriteLine($"HATA: UpsertHakedislerBulk - {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"INNER EXCEPTION: {ex.InnerException.Message}");
+                }
+                return StatusCode(500, $"Hakedişler kaydedilirken bir sunucu hatası oluştu: {ex.Message}");
             }
-            if (list.Count > 0)
-            {
-                _context.IsHakedisleri.AddRange(list);
-                await _context.SaveChangesAsync();
-            }
-
-            await tx.CommitAsync();
-            return Ok(list);
         }
 
         [HttpGet("isler/{isId}/hakedisler")]
@@ -211,33 +209,39 @@ namespace is_takip.Controllers
         [HttpPost("isler/{isId}/malzemeler/bulk")]
         public async Task<IActionResult> UpsertMalzemelerBulk(int isId, [FromBody] List<IsMalzemeleri> list)
         {
-            // İş mevcut mu?
             var isVarMi = await _context.MusteriIsleri.AnyAsync(j => j.IsId == isId);
             if (!isVarMi) return BadRequest("Geçersiz isId.");
 
             using var tx = await _context.Database.BeginTransactionAsync();
-
-            // Eski kayıtları kaldır
-            var eskiler = await _context.IsMalzemeleri.Where(m => m.IsId == isId).ToListAsync();
-            if (eskiler.Count > 0)
+            try
             {
-                _context.IsMalzemeleri.RemoveRange(eskiler);
+                var eskiler = await _context.IsMalzemeleri.Where(m => m.IsId == isId).ToListAsync();
+                if (eskiler.Any())
+                {
+                    _context.IsMalzemeleri.RemoveRange(eskiler);
+                }
+
+                foreach (var item in list)
+                {
+                    item.IsId = isId;
+                    item.IsMalzemeId = 0;
+                }
+                await _context.IsMalzemeleri.AddRangeAsync(list);
+
                 await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+                return Ok(list);
             }
-
-            // Yeni listeyi ekle
-            foreach (var item in list)
+            catch (Exception ex)
             {
-                item.IsId = isId;
+                await tx.RollbackAsync();
+                Console.WriteLine($"HATA: UpsertMalzemelerBulk - {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"INNER EXCEPTION: {ex.InnerException.Message}");
+                }
+                return StatusCode(500, $"Malzemeler kaydedilirken bir sunucu hatası oluştu: {ex.Message}");
             }
-            if (list.Count > 0)
-            {
-                _context.IsMalzemeleri.AddRange(list);
-                await _context.SaveChangesAsync();
-            }
-
-            await tx.CommitAsync();
-            return Ok(list);
         }
 
         [HttpGet("isler/{isId}/malzemeler")]
@@ -253,11 +257,9 @@ namespace is_takip.Controllers
         [HttpPost("malzemeler")]
         public async Task<ActionResult<IsMalzemeleri>> CreateMalzeme([FromBody] IsMalzemeleri malzeme)
         {
-            // İş mevcut mu?
             var isVarMi = await _context.MusteriIsleri.AnyAsync(j => j.IsId == malzeme.IsId);
             if (!isVarMi) return BadRequest("Geçersiz IsId.");
 
-            // Zorunlu alanlar
             if (string.IsNullOrWhiteSpace(malzeme.MalzemeAdi))
                 return BadRequest("Malzeme adı zorunludur.");
 
@@ -274,11 +276,9 @@ namespace is_takip.Controllers
             var mevcut = await _context.IsMalzemeleri.FirstOrDefaultAsync(m => m.IsMalzemeId == id);
             if (mevcut == null) return NotFound();
 
-            // Zorunlu alanlar
             if (string.IsNullOrWhiteSpace(malzeme.MalzemeAdi))
                 return BadRequest("Malzeme adı zorunludur.");
 
-            // Güncelleme
             mevcut.IsId = malzeme.IsId;
             mevcut.MalzemeAdi = malzeme.MalzemeAdi;
             mevcut.Birim = malzeme.Birim;
