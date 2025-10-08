@@ -129,39 +129,35 @@ namespace is_takip.Controllers
         [HttpPost("isler/{isId}/hakedisler/bulk")]
         public async Task<IActionResult> UpsertHakedislerBulk(int isId, [FromBody] List<IsHakedisleri> list)
         {
-            if (!await _context.MusteriIsleri.AnyAsync(j => j.IsId == isId)) return BadRequest("Geçersiz isId.");
+            var isVarMi = await _context.MusteriIsleri.AnyAsync(j => j.IsId == isId);
+            if (!isVarMi) return BadRequest("Geçersiz isId.");
 
-            // Hata mesajının önerdiği Execution Strategy'i oluştur
-            var strategy = _context.Database.CreateExecutionStrategy();
-
-            // Tüm işlemi bu stratejinin içine alarak çalıştır
-            return await strategy.ExecuteAsync(async () =>
+            try
             {
-                using var tx = await _context.Database.BeginTransactionAsync();
-                try
+                // Transaction kullanmadan basit silme ve ekleme
+                var eskiler = await _context.IsHakedisleri.Where(h => h.IsId == isId).ToListAsync();
+                if (eskiler.Count > 0)
                 {
-                    var eskiler = await _context.IsHakedisleri.Where(h => h.IsId == isId).ToListAsync();
-                    if (eskiler.Any()) _context.IsHakedisleri.RemoveRange(eskiler);
-
-                    foreach (var item in list)
-                    {
-                        item.IsId = isId;
-                        item.IsHakedisId = 0;
-                    }
-                    await _context.IsHakedisleri.AddRangeAsync(list);
-
+                    _context.IsHakedisleri.RemoveRange(eskiler);
                     await _context.SaveChangesAsync();
-                    await tx.CommitAsync();
+                }
 
-                    return Ok(list);
-                }
-                catch (Exception ex)
+                foreach (var item in list)
                 {
-                    await tx.RollbackAsync();
-                    Console.WriteLine($"HATA: UpsertHakedislerBulk - {ex.Message}\nINNER: {ex.InnerException?.Message}");
-                    return StatusCode(500, $"Hakedişler kaydedilirken bir sunucu hatası oluştu: {ex.Message}");
+                    item.IsId = isId;
                 }
-            });
+                if (list.Count > 0)
+                {
+                    _context.IsHakedisleri.AddRange(list);
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(list);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Hakedişler kaydedilirken hata: {ex.Message}");
+            }
         }
 
         [HttpGet("isler/{isId}/hakedisler")]
