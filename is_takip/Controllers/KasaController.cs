@@ -63,8 +63,10 @@ namespace is_takip.Controllers
                     return BadRequest("Tutar pozitif bir değer olmalıdır.");
                 }
 
-                // Tarihi her zaman standart UTC saati olarak ayarla.
-                gider.Tarih = DateTime.UtcNow;
+                // --- DÜZELTME ---
+                // Frontend'den gelen tarihin üzerine yazan satır kaldırıldı.
+                // Artık frontend'den gönderilen tarih ne ise o kullanılacak.
+                // gider.Tarih = DateTime.UtcNow; // <--- BU SATIR KALDIRILDI
 
                 _context.OrtakGiderler.Add(gider);
                 await _context.SaveChangesAsync();
@@ -73,7 +75,9 @@ namespace is_takip.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Gider eklenirken hata oluştu: {ex.Message}");
+                // Hata detayını sunucu loglarına yazdırmak için
+                Console.WriteLine($"Gider ekleme hatası: {ex.InnerException?.Message ?? ex.Message}");
+                return StatusCode(500, $"Gider eklenirken hata oluştu: {ex.InnerException?.Message ?? ex.Message}");
             }
         }
 
@@ -114,7 +118,9 @@ namespace is_takip.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"Gider güncellenirken hata oluştu: {ex.Message}");
+                // Hata detayını sunucu loglarına yazdırmak için
+                Console.WriteLine($"Gider güncelleme hatası: {ex.InnerException?.Message ?? ex.Message}");
+                return StatusCode(500, $"Gider güncellenirken hata oluştu: {ex.InnerException?.Message ?? ex.Message}");
             }
         }
 
