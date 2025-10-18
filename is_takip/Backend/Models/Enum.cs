@@ -7,7 +7,7 @@ namespace is_takip.Models
     public enum Rol { SUPER_ADMIN, VIEWER, FOREMAN }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
-    public enum OdemeyiYapan { Ömer, Barış, Kasa }
+    public enum OdemeyiYapan { Omer, Baris, Kasa }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public enum OdemeYontemi { cash, transfer, card }
