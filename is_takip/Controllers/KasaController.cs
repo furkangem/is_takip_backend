@@ -165,8 +165,8 @@ namespace is_takip.Controllers
                     return NotFound();
                 }
 
-                // Soft delete - silinme tarihini ayarla
-                gider.SilinmeTarihi = DateTime.UtcNow;
+                // Soft delete - silinme tarihini ayarla (PersonelController ile tutarlı GMT+3)
+                gider.SilinmeTarihi = ToGmt3(DateTime.UtcNow);
                 await _context.SaveChangesAsync();
 
                 return NoContent();
