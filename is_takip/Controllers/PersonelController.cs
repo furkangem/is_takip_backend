@@ -119,6 +119,9 @@ namespace is_takip.Controllers
             // Debug için
             Console.WriteLine($"Personel ödemesi ekleniyor: {odeme.PersonelId}, Tutar: {odeme.Tutar}");
 
+            // Set payment date same way as other timestamps (GMT+3)
+            odeme.Tarih = ToGmt3(DateTime.UtcNow);
+
             _context.PersonelOdemeleri.Add(odeme);
             await _context.SaveChangesAsync();
             return Ok(odeme);
