@@ -391,15 +391,35 @@ namespace is_takip.Controllers
         {
             try
             {
-                Console.WriteLine($"📥 Yeni defter notu ekleme isteği: {not.Baslik}");
+                Console.WriteLine($"📥 Yeni defter notu ekleme isteği: {not?.Baslik}");
 
+                if (not == null) return BadRequest("Not nesnesi boş.");
+                if (string.IsNullOrWhiteSpace(not.Baslik)) return BadRequest("Başlık zorunludur.");
+
+                // Oluşturma tarihini sunucuda ayarla (GMT+3) ve kaydet
                 not.OlusturmaTarihi = ToGmt3(DateTime.UtcNow);
                 not.TamamlandiMi = false;
 
                 _context.DefterNotlari.Add(not);
                 await _context.SaveChangesAsync();
                 Console.WriteLine($"✅ Defter notu eklendi: Id={not.NotId}");
-                return Ok(not);
+
+                // Dönen cevabı deterministik yap: tarihleri ISO8601 offset string olarak gönder
+                var createdAtIso = new DateTimeOffset(not.OlusturmaTarihi, TimeSpan.FromHours(3)).ToString("o");
+                var response = new
+                {
+                    id = not.NotId,
+                    title = not.Baslik,
+                    description = not.Aciklama,
+                    category = not.Kategori,
+                    createdAt = createdAtIso,
+                    dueDate = not.VadeTarihi.HasValue
+                        ? new DateTimeOffset(ToGmt3(EnsureUtcForWrite(not.VadeTarihi.Value)), TimeSpan.FromHours(3)).ToString("o")
+                        : null,
+                    completed = not.TamamlandiMi
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {
