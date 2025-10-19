@@ -119,8 +119,26 @@ namespace is_takip.Controllers
             // Debug için
             Console.WriteLine($"Personel ödemesi ekleniyor: {odeme.PersonelId}, Tutar: {odeme.Tutar}");
 
-            // Set payment date same way as other timestamps (GMT+3)
-            odeme.Tarih = ToGmt3(DateTime.UtcNow);
+            // Eğer frontend tarih göndermedi ise güncel zamanı kullan.
+            // Eğer frontend tarih gönderdiyse, seçtiği gün/ayı koruyacak şekilde normalize et:
+            // - Unspecified gelen tarih client-local olarak kabul edilir -> Local -> ToUniversalTime -> ToGmt3 ile aynı davranış sağlanır.
+            if (odeme.Tarih == default || odeme.Tarih == DateTime.MinValue)
+            {
+                odeme.Tarih = ToGmt3(DateTime.UtcNow);
+            }
+            else
+            {
+                var dt = odeme.Tarih;
+                if (dt.Kind == DateTimeKind.Unspecified)
+                {
+                    // Gelen tarih muhtemelen istemcinin yerel saati (unspecified). Local olarak işaretleyip UTC'ye çevir.
+                    dt = DateTime.SpecifyKind(dt, DateTimeKind.Local);
+                }
+
+                // dt artık ya Utc ya da Local; ToUniversalTime ile UTC'ye çevir, ardından ToGmt3 ile uygulanan proje-tutarlılığı sağla.
+                var utc = dt.Kind == DateTimeKind.Utc ? dt : dt.ToUniversalTime();
+                odeme.Tarih = ToGmt3(utc);
+            }
 
             _context.PersonelOdemeleri.Add(odeme);
             await _context.SaveChangesAsync();
