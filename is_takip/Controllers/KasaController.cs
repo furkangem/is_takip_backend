@@ -19,7 +19,16 @@ namespace is_takip.Controllers
             _context = context;
         }
 
-        // =================================================================
+        // GMT+3 dönüştürücü (PersonelController ile aynı davranış)
+        private static DateTime ToGmt3(DateTime dt)
+        {
+            var utc = dt.Kind == DateTimeKind.Utc
+                ? dt
+                : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+            return utc.AddHours(3);
+        }
+
+        // =================================================================                                
         // --- ORTAK GİDERLER (SharedExpenses) CRUD İŞLEMLERİ ---
         // =================================================================
 
@@ -63,10 +72,8 @@ namespace is_takip.Controllers
                     return BadRequest("Tutar pozitif bir değer olmalıdır.");
                 }
 
-                // --- DÜZELTME ---
-                // Frontend'den gelen tarihin üzerine yazan satır kaldırıldı.
-                // Artık frontend'den gönderilen tarih ne ise o kullanılacak.
-                // gider.Tarih = DateTime.UtcNow; // <--- BU SATIR KALDIRILDI
+                // PersonelController ile aynı davranış: sunucu zamanı (UTC -> GMT+3) kullan
+                gider.Tarih = ToGmt3(DateTime.UtcNow);
 
                 _context.OrtakGiderler.Add(gider);
                 await _context.SaveChangesAsync();
@@ -106,7 +113,8 @@ namespace is_takip.Controllers
                 // Güncelleme işlemi
                 mevcutGider.Aciklama = gelenGiderVerisi.Aciklama;
                 mevcutGider.Tutar = gelenGiderVerisi.Tutar;
-                mevcutGider.Tarih = gelenGiderVerisi.Tarih; // Tarih de güncellenebilir
+                // PersonelController ile aynı mantık: güncellemede sunucu zamanını kullan
+                mevcutGider.Tarih = ToGmt3(DateTime.UtcNow);
                 mevcutGider.OdemeYontemi = gelenGiderVerisi.OdemeYontemi;
                 mevcutGider.OdeyenKisi = gelenGiderVerisi.OdeyenKisi;
                 mevcutGider.Durum = gelenGiderVerisi.Durum;
@@ -228,7 +236,6 @@ namespace is_takip.Controllers
         // =================================================================
         // --- DİĞER KASA İŞLEMLERİ ---
         // =================================================================
-
         // Buraya diğer kasa işlemlerini ekleyebilirsiniz
         // Örnek: Gelirler, genel giderler, kasa bakiyesi vb.
     }
