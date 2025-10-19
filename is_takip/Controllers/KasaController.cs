@@ -404,8 +404,16 @@ namespace is_takip.Controllers
                 await _context.SaveChangesAsync();
                 Console.WriteLine($"✅ Defter notu eklendi: Id={not.NotId}");
 
-                // Dönen cevabı deterministik yap: tarihleri ISO8601 offset string olarak gönder
-                var createdAtIso = new DateTimeOffset(not.OlusturmaTarihi, TimeSpan.FromHours(3)).ToString("o");
+                // Saf ve güvenli dönüş: DateTimeOffset üzerinden offset uygulayıp ISO8601 string üret
+                var createdAtIso = new DateTimeOffset(not.OlusturmaTarihi).ToOffset(TimeSpan.FromHours(3)).ToString("o");
+
+                string? dueDateIso = null;
+                if (not.VadeTarihi.HasValue)
+                {
+                    var vadeUtcNormalized = EnsureUtcForWrite(not.VadeTarihi.Value);
+                    dueDateIso = new DateTimeOffset(vadeUtcNormalized).ToOffset(TimeSpan.FromHours(3)).ToString("o");
+                }
+
                 var response = new
                 {
                     id = not.NotId,
@@ -413,9 +421,7 @@ namespace is_takip.Controllers
                     description = not.Aciklama,
                     category = not.Kategori,
                     createdAt = createdAtIso,
-                    dueDate = not.VadeTarihi.HasValue
-                        ? new DateTimeOffset(ToGmt3(EnsureUtcForWrite(not.VadeTarihi.Value)), TimeSpan.FromHours(3)).ToString("o")
-                        : null,
+                    dueDate = dueDateIso,
                     completed = not.TamamlandiMi
                 };
 
