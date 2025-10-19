@@ -5,6 +5,7 @@ using is_takip.Models;
 using System;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace is_takip.Controllers
 {
@@ -26,6 +27,36 @@ namespace is_takip.Controllers
                 ? dt
                 : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
             return utc.AddHours(3);
+        }
+
+        // Güvenli olarak DB'ye yazmadan önce DateTime'ı UTC'ye dönüştürür.
+        // - Utc -> olduğu gibi döner
+        // - Local -> ToUniversalTime()
+        // - Unspecified:
+        //    * eğer sadece tarih (time = 00:00) ise seçilen günü korumak için UTC olarak işaretler (preserve date)
+        //    * aksi halde istemcinin local zamanı varsayılarak UTC'ye çevirir.
+        private static DateTime EnsureUtcForWrite(DateTime dt)
+        {
+            if (dt == default) return DateTime.UtcNow;
+
+            if (dt.Kind == DateTimeKind.Utc) return dt;
+            if (dt.Kind == DateTimeKind.Local) return dt.ToUniversalTime();
+
+            // Unspecified
+            if (dt.TimeOfDay == TimeSpan.Zero)
+            {
+                // Date-only from client (e.g. "2025-10-19") — preserve selected day by treating as UTC date
+                return DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+            }
+
+            // Otherwise treat unspecified as client-local and convert to UTC
+            return DateTime.SpecifyKind(dt, DateTimeKind.Local).ToUniversalTime();
+        }
+
+        private static DateTime? EnsureUtcForWrite(DateTime? dt)
+        {
+            if (!dt.HasValue) return null;
+            return EnsureUtcForWrite(dt.Value);
         }
 
         // =================================================================
@@ -72,9 +103,7 @@ namespace is_takip.Controllers
                     return BadRequest("Tutar pozitif bir değer olmalıdır.");
                 }
 
-                // Frontend'den gelen tarihi kullanıyoruz (önceki düzeltmemiz)
-                // gider.Tarih = ToGmt3(DateTime.UtcNow); // Bu satır kaldırılmıştı, doğru.
-
+                // Frontend'den gelen tarihi kullanıyoruz
                 _context.OrtakGiderler.Add(gider);
                 await _context.SaveChangesAsync();
 
@@ -82,7 +111,6 @@ namespace is_takip.Controllers
             }
             catch (Exception ex)
             {
-                // Hata detayını sunucu loglarına yazdırmak için
                 Console.WriteLine($"Gider ekleme hatası: {ex.InnerException?.Message ?? ex.Message}");
                 return StatusCode(500, $"Gider eklenirken hata oluştu: {ex.InnerException?.Message ?? ex.Message}");
             }
@@ -93,7 +121,6 @@ namespace is_takip.Controllers
         {
             try
             {
-                // Validation kontrolü
                 if (string.IsNullOrWhiteSpace(gelenGiderVerisi.Aciklama))
                 {
                     return BadRequest("Açıklama alanı boş bırakılamaz.");
@@ -110,7 +137,6 @@ namespace is_takip.Controllers
                     return NotFound();
                 }
 
-                // Güncelleme işlemi
                 mevcutGider.Aciklama = gelenGiderVerisi.Aciklama;
                 mevcutGider.Tutar = gelenGiderVerisi.Tutar;
                 mevcutGider.Tarih = gelenGiderVerisi.Tarih; // Frontend'den gelen tarih
@@ -120,12 +146,10 @@ namespace is_takip.Controllers
 
                 await _context.SaveChangesAsync();
 
-                // Güncellenmiş veriyi döndür
                 return Ok(mevcutGider);
             }
             catch (Exception ex)
             {
-                // Hata detayını sunucu loglarına yazdırmak için
                 Console.WriteLine($"Gider güncelleme hatası: {ex.InnerException?.Message ?? ex.Message}");
                 return StatusCode(500, $"Gider güncellenirken hata oluştu: {ex.InnerException?.Message ?? ex.Message}");
             }
@@ -165,7 +189,7 @@ namespace is_takip.Controllers
                 }
 
                 // Soft delete - silinme tarihini ayarla (UTC olarak)
-                gider.SilinmeTarihi = DateTime.UtcNow; // STANDART YÖNTEM
+                gider.SilinmeTarihi = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
                 return NoContent();
@@ -209,7 +233,6 @@ namespace is_takip.Controllers
                     return NotFound();
                 }
 
-                // Hard delete - veritabanından tamamen sil
                 _context.OrtakGiderler.Remove(gider);
                 await _context.SaveChangesAsync();
 
@@ -233,7 +256,7 @@ namespace is_takip.Controllers
         }
 
         // =================================================================
-        // --- YENİ EKLENEN BÖLÜM: DEFTER KAYITLARI (DefterEntry) ---
+        // --- DEFTER KAYITLARI (DefterEntry) CRUD İŞLEMLERİ ---
         // =================================================================
 
         [HttpGet("defterkayitlari")]
@@ -260,14 +283,16 @@ namespace is_takip.Controllers
             try
             {
                 Console.WriteLine($"📥 Yeni defter kaydı ekleme isteği: {kayit.Aciklama}");
-                // Frontend'den gelen tarih 'YYYY-MM-DD' formatındadır ve
-                // .NET bunu T00:00:00 olarak ve Kind=Unspecified olarak alır.
-                // 'timestamp without time zone' için bu doğrudur, olduğu gibi kaydedilir.
+
+                // Gelen tarih alanlarını DB yazımı için UTC'ye normalize et
+                kayit.IslemTarihi = EnsureUtcForWrite(kayit.IslemTarihi);
+                kayit.VadeTarihi = EnsureUtcForWrite(kayit.VadeTarihi);
+                kayit.OdenmeTarihi = EnsureUtcForWrite(kayit.OdenmeTarihi);
 
                 _context.DefterKayitlari.Add(kayit);
                 await _context.SaveChangesAsync();
                 Console.WriteLine($"✅ Defter kaydı eklendi: Id={kayit.KayitId}");
-                return Ok(kayit); // Yeni oluşturulan kaydı ID'si ile birlikte döndür
+                return Ok(kayit);
             }
             catch (Exception ex)
             {
@@ -294,19 +319,19 @@ namespace is_takip.Controllers
                     return NotFound();
                 }
 
-                // Değerleri güncelle
-                mevcutKayit.IslemTarihi = gelenKayit.IslemTarihi;
+                // Normalize ve güncelle (DB'ye yazmadan önce UTC yap)
+                mevcutKayit.IslemTarihi = EnsureUtcForWrite(gelenKayit.IslemTarihi);
                 mevcutKayit.Aciklama = gelenKayit.Aciklama;
                 mevcutKayit.Tutar = gelenKayit.Tutar;
                 mevcutKayit.Tip = gelenKayit.Tip;
                 mevcutKayit.Durum = gelenKayit.Durum;
-                mevcutKayit.VadeTarihi = gelenKayit.VadeTarihi;
-                mevcutKayit.OdenmeTarihi = gelenKayit.OdenmeTarihi;
+                mevcutKayit.VadeTarihi = EnsureUtcForWrite(gelenKayit.VadeTarihi);
+                mevcutKayit.OdenmeTarihi = EnsureUtcForWrite(gelenKayit.OdenmeTarihi);
                 mevcutKayit.Notlar = gelenKayit.Notlar;
 
                 await _context.SaveChangesAsync();
                 Console.WriteLine($"✅ Defter kaydı güncellendi: Id={id}");
-                return Ok(mevcutKayit); // Güncellenmiş nesneyi döndür
+                return Ok(mevcutKayit);
             }
             catch (Exception ex)
             {
@@ -341,9 +366,8 @@ namespace is_takip.Controllers
         }
 
         // =================================================================
-        // --- YENİ EKLENEN BÖLÜM: DEFTER NOTLARI (DefterNote) ---
+        // --- DEFTER NOTLARI (mevcut kodunuz) ---
         // =================================================================
-
         [HttpGet("defternotlari")]
         public async Task<ActionResult<IEnumerable<DefterNotlari>>> GetDefterNotlari()
         {
@@ -369,14 +393,13 @@ namespace is_takip.Controllers
             {
                 Console.WriteLine($"📥 Yeni defter notu ekleme isteği: {not.Baslik}");
 
-                // Oluşturma tarihini sunucuda ayarla (Koddaki ToGmt3 standardına uyarak)
                 not.OlusturmaTarihi = ToGmt3(DateTime.UtcNow);
-                not.TamamlandiMi = false; // Yeni not varsayılan olarak tamamlanmadı
+                not.TamamlandiMi = false;
 
                 _context.DefterNotlari.Add(not);
                 await _context.SaveChangesAsync();
                 Console.WriteLine($"✅ Defter notu eklendi: Id={not.NotId}");
-                return Ok(not); // Yeni oluşturulan nesneyi ID'si ile birlikte döndür
+                return Ok(not);
             }
             catch (Exception ex)
             {
@@ -403,17 +426,15 @@ namespace is_takip.Controllers
                     return NotFound();
                 }
 
-                // Değerleri güncelle
                 mevcutNot.Baslik = gelenNot.Baslik;
                 mevcutNot.Aciklama = gelenNot.Aciklama;
                 mevcutNot.Kategori = gelenNot.Kategori;
                 mevcutNot.VadeTarihi = gelenNot.VadeTarihi;
                 mevcutNot.TamamlandiMi = gelenNot.TamamlandiMi;
-                // OlusturmaTarihi güncellenmemeli, orijinali korunmalı
 
                 await _context.SaveChangesAsync();
                 Console.WriteLine($"✅ Defter notu güncellendi: Id={id}");
-                return Ok(mevcutNot); // Güncellenmiş nesneyi döndür
+                return Ok(mevcutNot);
             }
             catch (Exception ex)
             {
@@ -447,12 +468,6 @@ namespace is_takip.Controllers
             }
         }
 
-        // =================================================================
-        // --- DİĞER KASA İŞLEMLERİ ---
-        // =================================================================
-        // Buraya diğer kasa işlemlerini ekleyebilirsiniz
-        // Örnek: Gelirler, genel giderler, kasa bakiyesi vb.
-
-
+        // Diğer metodlar...
     }
 }
