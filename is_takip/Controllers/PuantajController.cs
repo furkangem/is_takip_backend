@@ -526,6 +526,18 @@ namespace is_takip.Controllers
             }
         }
 
+        // Accept requests coming via frontend proxy at /api/proxy/Puantaj/report/pdf
+        [HttpGet("~/api/proxy/Puantaj/report/pdf")]
+        public Task<IActionResult> GeneratePuantajPdfReport_Proxy(
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] int? personelId,
+            [FromQuery] int? isId,
+            [FromQuery] string groupBy = "personel")
+        {
+            return GeneratePuantajPdfReport(startDate, endDate, personelId, isId, groupBy);
+        }
+
         // --- Helper Sınıflar ---
         private class PuantajReportItem
         {
