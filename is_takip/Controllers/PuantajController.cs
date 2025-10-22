@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using is_takip.Data; // DbContext için
-using is_takip.Models; // Modeller için
+using is_takip.Models; // Modeller için         
 using System;
 using System.Collections.Generic;
 using System.Linq;
